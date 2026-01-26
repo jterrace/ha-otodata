@@ -120,6 +120,7 @@ def detection_callback(
         adv.local_name.startswith(OTODATA_MODEL_NUMBER)):
         serial = adv.local_name[len(OTODATA_MODEL_NUMBER):].strip()
         known_tanks[device.address] = serial
+        publish_ha_discovery(client, serial)
 
     # AdvertisementData(local_name='level: 80.0 % vertical',
     #                   manufacturer_data={945: b'OTOTELE\x02\x00\x12\x1d\x00\x05p6\x06\x18\x00\x00\xff\x00\x00\x00\x00'}, 
