@@ -118,7 +118,7 @@ def detection_callback(
     #                   rssi=-91)
     if (OTODATA_MFG_ID in adv.manufacturer_data and
         adv.local_name.startswith(OTODATA_MODEL_NUMBER)):
-        serial = adv.local_name[OTODATA_MODEL_NUMBER:].strip()
+        serial = adv.local_name[len(OTODATA_MODEL_NUMBER):].strip()
         known_tanks[device.address] = serial
 
     # AdvertisementData(local_name='level: 80.0 % vertical',
