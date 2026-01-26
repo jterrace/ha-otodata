@@ -34,7 +34,7 @@ logging.basicConfig(
 )
 
 
-def publish_ha_discovery(client: paho.mqtt.client.Client, serial: str) -> None:
+def publish_ha_discovery(client: paho.mqtt.client.Client, serial: str, address: str) -> None:
     """
     Publishes discovery payloads for a specific tank serial.
     Both entities point to the global BRIDGE_TOPIC for availability.
@@ -86,7 +86,7 @@ def publish_ha_discovery(client: paho.mqtt.client.Client, serial: str) -> None:
     )
 
     logging.info(
-        f"🆕 Discovered Tank: {serial}. Pointed to availability: {BRIDGE_TOPIC}"
+        f"🆕 Discovered Tank: {serial} at {address}. Pointed to availability: {BRIDGE_TOPIC}"
     )
     configured_serials.add(serial)
 
@@ -119,7 +119,10 @@ def detection_callback(
     ):
         serial = adv.local_name[len(OTODATA_MODEL_NUMBER) :].strip()
         known_tanks[device.address] = serial
-        publish_ha_discovery(client, serial)
+        publish_ha_discovery(client, serial, device.address)
+
+    if device.address in known_tanks:
+        logging.info(f"🔵 Detected Otodata Device: {known_tanks[device.address]} at {device.address} - {adv}")
 
     # AdvertisementData(local_name='level: 80.0 % vertical',
     #                   manufacturer_data={945: b'OTOTELE\x02\x00\x12\x1d\x00\x05p6\x06\x18\x00\x00\xff\x00\x00\x00\x00'},
