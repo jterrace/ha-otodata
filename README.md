@@ -2,8 +2,6 @@
 
 This project provides a Python-based bridge that listens for **Otodata Propane Tank Monitors** (such as the TM6030) via Bluetooth Low Energy (BLE) and publishes the data to **Home Assistant** via MQTT.
 
-It features **Auto-Discovery**, meaning tanks will automatically appear as devices in Home Assistant once detected, and includes a **Last Will and Testament (LWT)** to track the online/offline status of the bridge.
-
 ## 🚀 Features
 
 - **Zero-Config Discovery**: Automatically finds and creates sensors for any Otodata tank in range.
@@ -13,8 +11,8 @@ It features **Auto-Discovery**, meaning tanks will automatically appear as devic
 ## 🛠️ Installation
 
 ```bash
-$ python3 -m virtualenv venv
-$ ./venv/bin/pip install -r requirements.txt
+python3 -m virtualenv venv
+./venv/bin/pip install -r requirements.txt
 ```
 
 You can then manually test it with:

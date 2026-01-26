@@ -24,6 +24,7 @@ HA_PREFIX: str = "homeassistant"
 # --- CONSTANTS ---
 OTODATA_MFG_ID: int = 945  # 0x03B1
 OTODATA_PREFIX: bytes = b"OTO"
+OTODATA_MODEL_NUMBER: str = "TM6030"
 
 # --- GLOBAL STATE ---
 # Maps MAC Address -> Serial Number
@@ -48,7 +49,7 @@ def publish_ha_discovery(client: paho.mqtt.client.Client, serial: str) -> None:
         "identifiers": [f"otodata_{serial}"],
         "name": f"Propane Tank {serial}",
         "manufacturer": "Otodata",
-        "model": "TM6030",
+        "model": OTODATA_MODEL_NUMBER,
     }
 
     # 1. Level Sensor
@@ -93,18 +94,6 @@ def publish_ha_discovery(client: paho.mqtt.client.Client, serial: str) -> None:
     configured_serials.add(serial)
 
 
-def parse_serial(mfg_data: bytes) -> Optional[str]:
-    """Extracts the 4-byte serial (Little Endian) from Otodata manufacturer bytes."""
-    try:
-        if mfg_data.startswith(OTODATA_PREFIX):
-            # Serial starts at byte 7, 4 bytes long
-            serial_int = int.from_bytes(mfg_data[7:11], byteorder="little")
-            return str(serial_int)
-    except (IndexError, ValueError):
-        pass
-    return None
-
-
 def on_connect(
     client: paho.mqtt.client.Client,
     userdata: Any,
@@ -124,26 +113,28 @@ def detection_callback(
     device: BLEDevice, adv: AdvertisementData, client: paho.mqtt.client.Client
 ) -> None:
     """Main BLE processing loop."""
-    # 1. Look for Otodata Manufacturer Data to link MAC to Serial
-    mfg_bytes: Optional[bytes] = adv.manufacturer_data.get(OTODATA_MFG_ID)
-    if mfg_bytes:
-        serial = parse_serial(mfg_bytes)
-        if serial:
-            if device.address not in known_tanks:
-                known_tanks[device.address] = serial
-                publish_ha_discovery(client, serial)
+    # AdvertisementData(local_name='TM6030 20479133',
+    #                   manufacturer_data={945: b'OTOSTAT\x01s\x00s\x00\x8a\xbc\x04\x00\x07\xb7\x00\x00\x00\x00\x00\x00'},
+    #                   rssi=-91)
+    if (OTODATA_MFG_ID in adv.manufacturer_data and
+        adv.local_name.startswith(OTODATA_MODEL_NUMBER)):
+        serial = adv.local_name[OTODATA_MODEL_NUMBER:].strip()
+        known_tanks[device.address] = serial
 
-    # 2. If we know this MAC is a tank, look for the 'Friendly Name' level data
-    if device.address in known_tanks:
+    # AdvertisementData(local_name='level: 80.0 % vertical',
+    #                   manufacturer_data={945: b'OTOTELE\x02\x00\x12\x1d\x00\x05p6\x06\x18\x00\x00\xff\x00\x00\x00\x00'}, 
+    #                   rssi=-91)
+    if device.address in known_tanks and adv.local_name.startswith('level:'):
         serial = known_tanks[device.address]
         name = adv.local_name or ""
         match = re.search(r"level:\s*([\d.]+)", name)
-
-        if match:
-            level = float(match.group(1))
-            payload = {"level": level, "rssi": adv.rssi, "mac": device.address}
-            client.publish(f"otodata/{serial}/state", json.dumps(payload), retain=True)
-            logging.info(f"📊 [{serial}] {level}%")
+        if not match:
+            logging.error(f"❌ [{serial}] Failed to parse level from '{name}'")
+            return
+        level = float(match.group(1))
+        payload = {"level": level, "rssi": adv.rssi, "mac": device.address}
+        client.publish(f"otodata/{serial}/state", json.dumps(payload), retain=True)
+        logging.info(f"📊 [{serial}] {level}%")
 
 
 async def main() -> None:
