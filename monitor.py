@@ -11,22 +11,19 @@ from bleak.backends.scanner import AdvertisementData
 import paho.mqtt
 import paho.mqtt.client
 
-# --- CONFIGURATION (Environment Variables) ---
 MQTT_BROKER: str = os.getenv("MQTT_BROKER", "127.0.0.1")
 MQTT_PORT: int = int(os.getenv("MQTT_PORT", "1883"))
 MQTT_USER: Optional[str] = os.getenv("MQTT_USER")
 MQTT_PASS: Optional[str] = os.getenv("MQTT_PASS")
-
 # The central availability topic for the bridge itself
 BRIDGE_TOPIC: str = os.getenv("BRIDGE_TOPIC", "otodata/bridge/status")
-HA_PREFIX: str = "homeassistant"
+# Home assistant prefix
+HA_PREFIX: str = os.getenv("HA_PREFIX", "homeassistant")
 
-# --- CONSTANTS ---
+# BLE manufacturer ID for Otodata
 OTODATA_MFG_ID: int = 945  # 0x03B1
-OTODATA_PREFIX: bytes = b"OTO"
 OTODATA_MODEL_NUMBER: str = "TM6030"
 
-# --- GLOBAL STATE ---
 # Maps MAC Address -> Serial Number
 known_tanks: Dict[str, str] = {}
 # Tracks which serials have been "discovered" by HA
@@ -102,11 +99,12 @@ def on_connect(
     props: paho.mqtt.properties.Properties | None,
 ) -> None:
     """Publish online status immediately upon connection."""
-    if rc == 0:
-        logging.info(f"Connected to MQTT Broker ({MQTT_BROKER})")
-        client.publish(BRIDGE_TOPIC, "online", retain=True)
-    else:
+    if rc != 0:
         logging.error(f"MQTT Connection failed with code {rc}")
+        return
+
+    logging.info(f"Connected to MQTT Broker ({MQTT_BROKER})")
+    client.publish(BRIDGE_TOPIC, "online", retain=True)
 
 
 def detection_callback(
@@ -116,16 +114,17 @@ def detection_callback(
     # AdvertisementData(local_name='TM6030 20479133',
     #                   manufacturer_data={945: b'OTOSTAT\x01s\x00s\x00\x8a\xbc\x04\x00\x07\xb7\x00\x00\x00\x00\x00\x00'},
     #                   rssi=-91)
-    if (OTODATA_MFG_ID in adv.manufacturer_data and
-        adv.local_name.startswith(OTODATA_MODEL_NUMBER)):
-        serial = adv.local_name[len(OTODATA_MODEL_NUMBER):].strip()
+    if OTODATA_MFG_ID in adv.manufacturer_data and adv.local_name.startswith(
+        OTODATA_MODEL_NUMBER
+    ):
+        serial = adv.local_name[len(OTODATA_MODEL_NUMBER) :].strip()
         known_tanks[device.address] = serial
         publish_ha_discovery(client, serial)
 
     # AdvertisementData(local_name='level: 80.0 % vertical',
-    #                   manufacturer_data={945: b'OTOTELE\x02\x00\x12\x1d\x00\x05p6\x06\x18\x00\x00\xff\x00\x00\x00\x00'}, 
+    #                   manufacturer_data={945: b'OTOTELE\x02\x00\x12\x1d\x00\x05p6\x06\x18\x00\x00\xff\x00\x00\x00\x00'},
     #                   rssi=-91)
-    if device.address in known_tanks and adv.local_name.startswith('level:'):
+    if device.address in known_tanks and adv.local_name.startswith("level:"):
         serial = known_tanks[device.address]
         name = adv.local_name or ""
         match = re.search(r"level:\s*([\d.]+)", name)
@@ -142,7 +141,7 @@ async def main() -> None:
     logging.info(f"📡 Initializing MQTT connection to {MQTT_BROKER}:{MQTT_PORT}...")
     client = paho.mqtt.client.Client(
         callback_api_version=paho.mqtt.enums.CallbackAPIVersion.VERSION2,
-        client_id="otodata"
+        client_id="otodata",
     )
     client.will_set(BRIDGE_TOPIC, payload="offline", qos=1, retain=True)
     client.on_connect = on_connect
