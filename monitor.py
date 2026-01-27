@@ -111,33 +111,33 @@ def detection_callback(
     device: BLEDevice, adv: AdvertisementData, client: paho.mqtt.client.Client
 ) -> None:
     """Main BLE processing loop."""
+    otodata = adv.manufacturer_data.get(OTODATA_MFG_ID, None)
+    if not otodata:
+        return
+
     # AdvertisementData(local_name='TM6030 20479133',
     #                   manufacturer_data={945: b'OTOSTAT\x01s\x00s\x00\x8a\xbc\x04\x00\x07\xb7\x00\x00\x00\x00\x00\x00'},
     #                   rssi=-91)
-    if OTODATA_MFG_ID in adv.manufacturer_data and adv.local_name.startswith(
-        OTODATA_MODEL_NUMBER
-    ):
+    if adv.local_name.startswith(OTODATA_MODEL_NUMBER):
         serial = adv.local_name[len(OTODATA_MODEL_NUMBER) :].strip()
         known_tanks[device.address] = serial
         publish_ha_discovery(client, serial, device.address)
 
     if device.address in known_tanks:
-        logging.info(f"🔵 Detected Otodata Device: {known_tanks[device.address]} at {device.address} - {adv}")
+        logging.debug(f"🔵 Detected Otodata Device: {known_tanks[device.address]} at {device.address} - {adv}")
 
     # AdvertisementData(local_name='level: 80.0 % vertical',
     #                   manufacturer_data={945: b'OTOTELE\x02\x00\x12\x1d\x00\x05p6\x06\x18\x00\x00\xff\x00\x00\x00\x00'},
     #                   rssi=-91)
-    if device.address in known_tanks and adv.local_name.startswith("level:"):
+    if device.address in known_tanks and otodata.startswith(b"OTOTELE") and len(otodata) >= 10:
         serial = known_tanks[device.address]
-        name = adv.local_name or ""
-        match = re.search(r"level:\s*([\d.]+)", name)
-        if not match:
-            logging.error(f"❌ [{serial}] Failed to parse level from '{name}'")
+        tank_level = 100 - otodata[9]
+        if tank_level < 0 or tank_level > 100:
+            logging.error(f"❌ [{serial}] Invalid tank level received: {tank_level}")
             return
-        level = float(match.group(1))
-        payload = {"level": level, "rssi": adv.rssi, "mac": device.address}
+        payload = {"level": tank_level, "rssi": adv.rssi, "mac": device.address}
         client.publish(f"otodata/{serial}/state", json.dumps(payload), retain=True)
-        logging.info(f"📊 [{serial}] {level}%")
+        logging.info(f"📊 [{serial}] {tank_level}%")
 
 
 async def main() -> None:
