@@ -57,8 +57,8 @@ def publish_ha_discovery(client: paho.mqtt.client.Client, serial: str, address: 
         "availability_topic": BRIDGE_TOPIC,
         "unit_of_measurement": "%",
         "value_template": "{{ value_json.level }}",
-        "device_class": "gas",
         "icon": "mdi:propane-tank",
+        "state_class": "measurement",
         "device": device_info,
     }
     client.publish(
@@ -129,9 +129,9 @@ def detection_callback(
     # AdvertisementData(local_name='level: 80.0 % vertical',
     #                   manufacturer_data={945: b'OTOTELE\x02\x00\x12\x1d\x00\x05p6\x06\x18\x00\x00\xff\x00\x00\x00\x00'},
     #                   rssi=-91)
-    if device.address in known_tanks and otodata.startswith(b"OTOTELE") and len(otodata) >= 10:
+    if device.address in known_tanks and otodata.startswith(b"OTOTELE") and len(otodata) >= 11:
         serial = known_tanks[device.address]
-        tank_level = 100 - otodata[9]
+        tank_level = 100 - otodata[10]
         if tank_level < 0 or tank_level > 100:
             logging.error(f"❌ [{serial}] Invalid tank level received: {tank_level}")
             return
