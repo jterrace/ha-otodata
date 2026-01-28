@@ -19,6 +19,7 @@ MQTT_PASS: Optional[str] = os.getenv("MQTT_PASS")
 BRIDGE_TOPIC: str = os.getenv("BRIDGE_TOPIC", "otodata/bridge/status")
 # Home assistant prefix
 HA_PREFIX: str = os.getenv("HA_PREFIX", "homeassistant")
+LOG_LEVEL: Optional[str] = os.getenv("LOG_LEVEL", "INFO")
 
 # BLE manufacturer ID for Otodata
 OTODATA_MFG_ID: int = 945  # 0x03B1
@@ -30,7 +31,7 @@ known_tanks: Dict[str, str] = {}
 configured_serials: Set[str] = set()
 
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.getLevelNamesMapping()[LOG_LEVEL], format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 
@@ -124,14 +125,14 @@ def detection_callback(
         publish_ha_discovery(client, serial, device.address)
 
     if device.address in known_tanks:
-        logging.debug(f"🔵 Detected Otodata Device: {known_tanks[device.address]} at {device.address} - {adv}")
+        logging.info(f"🔵 Detected Otodata Device: {known_tanks[device.address]} at {device.address} - {adv}")
 
     # AdvertisementData(local_name='level: 80.0 % vertical',
     #                   manufacturer_data={945: b'OTOTELE\x02\x00\x12\x1d\x00\x05p6\x06\x18\x00\x00\xff\x00\x00\x00\x00'},
     #                   rssi=-91)
-    if device.address in known_tanks and otodata.startswith(b"OTOTELE") and len(otodata) >= 11:
+    if device.address in known_tanks and otodata.startswith(b"OTOTELE") and len(otodata) >= 12:
         serial = known_tanks[device.address]
-        tank_level = 100 - otodata[10]
+        tank_level = int.from_bytes(otodata[9:11], byteorder="little") / 100
         if tank_level < 0 or tank_level > 100:
             logging.error(f"❌ [{serial}] Invalid tank level received: {tank_level}")
             return
